@@ -16,7 +16,7 @@ usr_file = '/home/aaron/Downloads/UserModList - July282023.tsv'
 
 # shuffle playlist
 shuffle = True
-shuffle_seed = 13
+shuffle_seed = 69
 
 # resume playlist (if script crashed for any reason)
 restart = False
@@ -24,12 +24,6 @@ restart_song_number = 1
 
 ###############################################################################
 ###############################################################################
-###############################################################################
-# Authorization for Spotify app Naaron
-os.putenv("SPOTIPY_CLIENT_ID", "c118251c62034030af7fd8090f869151")
-os.putenv("SPOTIPY_CLIENT_SECRET", "cd5e2d60846c41b497aa90525e995ff1")
-os.putenv("SPOTIPY_REDIRECT_URI", "https://spotipy.readthedocs.io/en/2.22.1/")
-
 ###############################################################################
 # read input user file
 if len(usr_file) == 0:
