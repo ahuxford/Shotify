@@ -9,10 +9,10 @@ import sys
 import os
 
 # collaborative playlist to play
-playlist = "Naaron’s PH Dance-y Club" # apostrophe needs to be an actual apostrophe, due to naming playlist using iPhone (or Mac)
+playlist = "Naaron’s PH LetsGetWeird" # apostrophe needs to be an actual apostrophe, due to naming playlist using iPhone (or Mac)
 
 # file for modifying start times, MUST BE TAB DELIMITED (TSV) file
-usr_file = '/home/aaron/Downloads/UserModList - July282023.tsv'
+usr_file = '/Users/noahwaller/Downloads/UsrModList_Feb172024 - Sheet1.tsv'
 
 # shuffle playlist
 shuffle = True
