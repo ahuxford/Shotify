@@ -1,5 +1,15 @@
 # Shotify
-# By Aaron Huxford and Noah Waller
+# Coauthored by Dr. Aaron Huxford and Dr. Noah Waller
+
+# Instructions:
+# 1. Ensure you have the necessary permissions and Spotify API credentials set up for your account.
+# 2. First create the time file by running this script with `time_file = "create"` and `save_file` set to the desired output path.
+# 3. Run the script again with the `time_file` set to the path of the created time file.
+# 4. Optionally, set `restart = True` and `restart_song_number` to the desired song number to resume playback from a specific point.
+# 5. Adjust `playlist` to the desired collaborative playlist name.
+# 6. Set `shuffle_seed` to a desired integer for shuffling the playlist.
+# 7. Run the script to start playback of the playlist.
+# 8. Enjoy the music and the fun of Shotify!
 
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
@@ -7,175 +17,131 @@ import time
 import numpy as np
 import sys
 import os
+from Shotify_functions import *
 
-# collaborative playlist to play
-playlist = "Naaron’s PH Dance-y Club" # apostrophe needs to be an actual apostrophe, due to naming playlist using iPhone (or Mac)
-
-# file for modifying start times, MUST BE TAB DELIMITED (TSV) file
-usr_file = '/home/aaron/Downloads/UserModList - July282023.tsv'
-
-# shuffle playlist
-shuffle = True
-shuffle_seed = 69
-
-# resume playlist (if script crashed for any reason)
+# initialize some variables, DONT TOUCH
+save_file = None
 restart = False
 restart_song_number = 1
+shuffle_seed = int(time.time()) # use current time as seed
+
+# USER: collaborative playlist to play
+playlist = "Naaron’s PH Hot" # apostrophe needs to be an actual apostrophe, due to naming playlist using iPhone (or Mac)
+
+# USER: shuffle playlist based on a seed
+# shuffle_seed = 123
+
+# USER: restart playlist from a specific song number (if script crashed for any reason)
+# restart = True
+# restart_song_number = 20
+
+# USER:tsv file for song start times
+time_file = "/home/aaron/Shotify/PH_times/PH_July42025.tsv"
+# time_file = "create" # used to create a new user modification file, will prompt for start times of each song
+# save_file = "/home/aaron/Shotify/PH_times/PH_July42025.tsv" # output file for user modifications, if creating new file
 
 ###############################################################################
 ###############################################################################
 ###############################################################################
-# read input user file
-if len(usr_file) == 0:
-    print('No user modifications required for playlist...')
-    usr_mod_names    = [] # song name
-    usr_mod_artists  = [] # song artist
-    usr_mod_times    = [] # start time
-    usr_mod_position = [] # desired position in playlist
-else:
-    print('Performing user modifications to playlist...')
-    usr_array = np.genfromtxt(fname=usr_file,delimiter='\t',skip_header=1,usecols=(0,1),dtype=str)
-    usr_times = np.genfromtxt(fname=usr_file,delimiter='\t',skip_header=1,usecols=(2),dtype=int)
-    usr_position = np.genfromtxt(fname=usr_file,delimiter='\t',skip_header=1,usecols=(3),dtype=int)
-
-    usr_mod_names    = usr_array[:,0].tolist()
-    usr_mod_artists  = usr_array[:,1].tolist()
-    usr_mod_times    = usr_times.tolist()
-    usr_mod_position = usr_position.tolist()
-
-# force restart number to atleast 1
-if restart_song_number  < 1:
-    restart_song_number  = 1
-
 # setup spotify access
 scope = "user-read-playback-state,user-modify-playback-state,playlist-read-collaborative"
 sp = spotipy.Spotify(client_credentials_manager=SpotifyOAuth(scope=scope))
 
-# loop through seen playlists and find input playlist
-results = sp.current_user_playlists(limit=50)
-for i, item in enumerate(results['items']):
-    if item['name'] == playlist:
-        break
+# create time file
+if time_file == "create":
 
-playlist_items = sp.playlist_items(item['id'])
+    if save_file is not None:
+        out_file = save_file
+    else:
+        out_file = os.path.abspath("PH_times.csv")
 
-# initial lists for tracks
-tracks_uri    = []
-tracks_time   = []
-tracks_name   = []
-tracks_artist = []
+    create_time_file(sp=sp, playlist=playlist, out_file=out_file)
+    sys.exit() # Exits the script
 
-mod_name   = []
-mod_artist = []
+# read time file
+print('Using time file at:', time_file)
+time_data = np.genfromtxt(time_file, delimiter='\t', names=True, dtype=None)
+N_songs = len(time_data)
+names   = time_data['name'].tolist()
+artists = time_data['artist'].tolist()
+times   = time_data['time'].tolist()
+uris    = time_data['uri'].tolist()
 
-# loop through playlist songs, build lists
-for i, items in enumerate(playlist_items['items']):
-    tracks_uri.append(items['track']['uri'])
-    tracks_name.append(items['track']['name'])
-    tracks_artist.append(items['track']['artists'][0]['name'])
-    tracks_time.append(0) # default to zero
+# shuffle order of songs
+np.random.seed(shuffle_seed)
+print('Random seed used for shuffle:', np.random.get_state()[1][0])
 
+random_order = np.arange(N_songs)
+np.random.shuffle(random_order)
 
-# loop through modifications for playlist
-i_mod = 0
-for i, name in enumerate(usr_mod_names):    \
+random_names   = []
+random_artists = []
+random_times   = []
+random_uris    = []
 
-    mod_name.append(name)
-    mod_artist.append(usr_mod_artists[i])
+for i in random_order:
+    random_names.append(names[i])
+    random_artists.append(artists[i])
+    random_times.append(times[i])
+    random_uris.append(uris[i])
 
-    for j, items in enumerate(playlist_items['items']):   # loop through playlist again
-
-        if (items['track']['name'] == mod_name[-1]) and (items['track']['artists'][0]['name'] == mod_artist[-1]):
-
-            tracks_time[j] = usr_mod_times[i]
-            i_mod += 1
-
-# check if typo in supplied modification lists
-if i_mod != len(usr_mod_names):
-
-    print('')
-    print('Typo in user provided modification file in song name or artist')
-    print('')
-
-    sys.exit('Error in supplied modification file')
-
-
-N_songs = len(tracks_uri)
-
-###############################################################################
-###############################################################################
-# if playlist is shuffled
-
-if shuffle:
-    np.random.seed(shuffle_seed)
-
-    # in case playlist stops/crashes
-    print('Random seed used for shuffle =', np.random.get_state()[1][0])
-
-    random_order = np.arange(N_songs)
-    np.random.shuffle(random_order)
-
-    random_tracks_uri  = []
-    random_tracks_time = []
-    random_tracks_name = []
-    random_tracks_artist = []
-
-    for i in random_order:
-        random_tracks_uri.append(tracks_uri[i])
-        random_tracks_time.append(tracks_time[i])
-        random_tracks_name.append(tracks_name[i])
-        random_tracks_artist.append(tracks_artist[i])
-
-    tracks_uri    = random_tracks_uri
-    tracks_name   = random_tracks_name
-    tracks_time   = random_tracks_time
-    tracks_artist = random_tracks_artist
-
-
-###############################################################################
-###############################################################################
-# if restarting modify list of songs
-
+# restarting playback if crashed for some reason
 if restart:
-    tracks_uri  = tracks_uri[(restart_song_number-1):]
-    tracks_time = tracks_time[(restart_song_number-1):]
-    tracks_name = tracks_name[(restart_song_number-1):]
-else:
-    restart_song_number = 1
+    random_names   = random_names[(restart_song_number-1):]
+    random_artists = random_artists[(restart_song_number-1):]
+    random_times   = random_times[(restart_song_number-1):]
+    random_uris    = random_uris[(restart_song_number-1):]
 
-###############################################################################
-###############################################################################
-# modify position of song supplied by user's modification list
+# redistribute Afroman songs (thank you github copilot)
+afroman_count = random_artists.count("Afroman")
+afroman_indices = [i for i, artist in enumerate(random_artists) if artist == "Afroman"]
+print(f"Number of 'Afroman' songs being redistributed: {afroman_count}")
 
-# hurt my head making this
-for i, uri in enumerate(tracks_uri):
+if afroman_count > 0:
+    # Calculate new evenly spaced indices, then subtract 1 to shift (e.g., 30 -> 29)
+    new_indices = [int(round((N_songs * (k + 0.5)) / afroman_count - 0.5)) - 1 for k in range(afroman_count)]
+    # Clamp indices to valid range
+    new_indices = [min(max(idx, 0), N_songs - 1) for idx in new_indices]
 
-    name = tracks_name[i]
+    # Remove Afroman songs from current positions
+    afroman_songs = [(random_names[i], random_artists[i], random_times[i], random_uris[i]) for i in afroman_indices]
+    for i in sorted(afroman_indices, reverse=True):
+        del random_names[i]
+        del random_artists[i]
+        del random_times[i]
+        del random_uris[i]
 
-    if name in mod_name:
-        i_mod = mod_name.index(name)
+    # Insert Afroman songs at new indices
+    for insert_idx, song in sorted(zip(new_indices, afroman_songs)):
+        random_names.insert(insert_idx, song[0])
+        random_artists.insert(insert_idx, song[1])
+        random_times.insert(insert_idx, song[2])
+        random_uris.insert(insert_idx, song[3])
 
-        if usr_mod_position[i_mod] != -1: # -1 is an empty cell
+    print(f"Redistributed 'Afroman' songs to indices: {new_indices}")
 
-            i_moveto = usr_mod_position[i_mod]-1
-
-            # swap songs, in theory this will work unless probability gets us
-            tracks_uri[i_moveto] ,tracks_uri[i]  = tracks_uri[i] ,tracks_uri[i_moveto]
-            tracks_time[i_moveto],tracks_time[i] = tracks_time[i],tracks_time[i_moveto]
-###############################################################################
-###############################################################################
-
-# convert s to ms for position
-tracks_time_ms= [value * 1000 for value in tracks_time]
-
+# playback songs
+random_times_ms= [value * 1000 for value in random_times]
 time_per_song = 60 # time to play each song, in seconds
 
-# play songs (:
-for i, song_uri in enumerate(tracks_uri):
+for i, song_uri in enumerate(random_uris):
+    if i in [14, 29, 44]: # play airhorn sound at specific song indices
+        print(f"Alert: at song {i+restart_song_number} of {N_songs}!\n")
+        sp.start_playback(uris=["spotify:track:4aT8Ly8q4V1ZS1x7Mu0PHw"])
+        time.sleep(5)
 
     # play song
-    sp.start_playback(uris=[song_uri], position_ms=tracks_time_ms[i])
+    sp.start_playback(uris=[song_uri], position_ms=random_times_ms[i])
 
-    print("Playing song number", i+restart_song_number, "of", N_songs)
+    print(f"Playing song {i+restart_song_number} of {N_songs}")
+    print(f"{random_names[i]} by {random_artists[i]}\n")
 
     time.sleep(time_per_song)
+
+print(f"Alert: you're done!\n")
+sp.start_playback(uris=["spotify:track:4aT8Ly8q4V1ZS1x7Mu0PHw"])
+time.sleep(5)
+
+# play "Friday by Riton et al" to finish
+sp.start_playback(uris=["spotify:track:4cG7HUWYHBV6R6tHn1gxrl"])
+print("Playing 'Friday' by Riton et al to finish.\n")
